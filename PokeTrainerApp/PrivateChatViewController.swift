@@ -10,10 +10,7 @@ import Firebase
 import JSQMessagesViewController
 import Alamofire
 
-import Foundation
-import MessageUI
-
-class PrivateChatViewController: JSQMessagesViewController, MFMailComposeViewControllerDelegate {
+class PrivateChatViewController: JSQMessagesViewController {
     
     // MARK: Properties
     var userIsTypingRef: FIRDatabaseReference!
@@ -295,14 +292,8 @@ class PrivateChatViewController: JSQMessagesViewController, MFMailComposeViewCon
             
             //Messageid,userid,email and message text
             
-            let mailComposerVC = MFMailComposeViewController()
-            mailComposerVC.mailComposeDelegate = self // Extremely important to set the --mailComposeDelegate-- property, NOT the --delegate-- property
-            
-            mailComposerVC.setToRecipients(["support@poketrainerapp.com"])
-            mailComposerVC.setSubject("Requset to block user")
-            //mailComposerVC.setMessageBody("Message Id : \(message.key) \n Message Text: \(message.text) \nSent By : \(message.senderId) \nBlock Requset Sent by : \(myUserID ?? "") \n Reported on \(NSDate.init())", isHTML: false)
-            
-            CommonUtils.sharedUtils.showProgress(self.view, label: "Waiting..")
+           
+            CommonUtils.sharedUtils.showProgress(self.view, label: "Submitting report..")
             FIRDatabase.database().reference().child("users").child(userId).child("userInfo").observeSingleEventOfType(.Value, withBlock: { (snapshot) in
                 
                 var email = ""
@@ -312,11 +303,21 @@ class PrivateChatViewController: JSQMessagesViewController, MFMailComposeViewCon
                     email = userInfo["email"] as? String ?? ""
                 }
                 
-                mailComposerVC.setMessageBody("message Id : \(self.groupId ?? "") \n Message Text: \(text) Email  : \(email) (\(name)) \nSent By : \(self.senderId) on \(date) \nBlock Requset Sent by : \(FIRAuth.auth()?.currentUser?.uid ?? "") \n Reported on \(NSDate.init()) for personal chat", isHTML: false)
-                if MFMailComposeViewController.canSendMail() {
-                    self.presentViewController(mailComposerVC, animated: true, completion: nil)
-                } else {
-                    self.showSendMailErrorAlert()
+                let message = "message Id : \(self.groupId ?? "") \n Message Text: \(text) Email  : \(email) (\(name)) \nSent By : \(self.senderId) on \(date) \nBlock Requset Sent by : \(FIRAuth.auth()?.currentUser?.uid ?? "") \n Reported on \(NSDate.init()) for personal chat"
+                
+                Alamofire.request(.GET, "http://trainersmatchapp.com/poketrainerapp/api/reportUser.php", parameters: ["from": email ,"subject":"Request to block user in personal chat","message":message])
+                    .responseJSON { response in
+                        debugPrint(response.result.value)
+                        var msg = ""
+                        if let result = response.result.value as? NSDictionary
+                            where (result["result"] as? String ?? "") == "true"
+                        {
+                            msg = "Thank you, Your report submitted successfully. Our team will soon takes appropriate action."
+                        } else {
+                            msg = "Failed to submit report."
+                        }
+                        let sendMailErrorAlert = UIAlertView(title: "Message", message: msg , delegate: nil, cancelButtonTitle: "OK")
+                        sendMailErrorAlert.show()
                 }
             })
             
@@ -333,19 +334,6 @@ class PrivateChatViewController: JSQMessagesViewController, MFMailComposeViewCon
         return super.canPerformAction(action, withSender:sender)
     }
     
-    func showSendMailErrorAlert() {
-        let sendMailErrorAlert = UIAlertView(title: "Could Not Send Email", message: "Your device could not send e-mail.  Please check e-mail configuration and try again.", delegate: nil, cancelButtonTitle: "OK")
-        sendMailErrorAlert.show()
-    }
-    
-    // MARK: MFMailComposeViewControllerDelegate
-    
-    func mailComposeController(controller: MFMailComposeViewController, didFinishWithResult result: MFMailComposeResult, error: NSError?) {
-        controller.dismissViewControllerAnimated(true, completion: nil)
-        
-        let sendMailErrorAlert = UIAlertView(title: "Message", message: (error == nil) ? "Thank you,\n Your report submitted successfully. Our team will soon takes appropriate action." : "Your device could not send e-mail.  Please check e-mail configuration and try again.", delegate: nil, cancelButtonTitle: "OK")
-        sendMailErrorAlert.show()
-    }
     
     func ClearRecentCounter( groupId:String)
     {
